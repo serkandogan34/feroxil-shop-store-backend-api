@@ -7,12 +7,12 @@ const app = express();
 const port = 3000;
 
 // Middleware'leri kullanma
-app.use(cors()); 
+app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// n8n Webhook URL'nizi buraya tanımlayın
-const N8N_WEBHOOK_URL = "https://n8nwork.dtekai.com/webhook-test/bc74f59e-54c2-4521-85a1-6e21a0438c31"; 
+// n8n Webhook URL'nizi Coolify ortam değişkenlerinden okuyun
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
 // Formdan gelen verileri işleyecek API endpoint'i
 app.post('/api/order', async (req, res) => {
