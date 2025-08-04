@@ -22,6 +22,10 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, $formData);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, $forwardedHeaders);
 
+// SSL doğrulamasını devre dışı bırak
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
 // Hata ayıklama kodları
 $response = curl_exec($ch);
 $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
