@@ -1,22 +1,32 @@
 <?php
-// Bu URL tarayıcıya gönderilmez ve güvenli bir şekilde saklanır
-$n8nWebhookUrl = "YOUR_N8N_WEBHOOK_URL";
+// n8n Webhook URL'si
+$n8nWebhookUrl = "https://n8nwork.dtekai.com/webhook-test/bc74f59e-54c2-4521-85a1-6e21a0438c31";
 
 // Tarayıcıdan gelen JSON verisini yakala
 $formData = file_get_contents('php://input');
+
+// Tarayıcıdan gelen başlıkları yakala
+$headers = getallheaders();
+$forwardedHeaders = [];
+
+foreach ($headers as $key => $value) {
+    if (in_array(strtolower($key), ['host', 'content-type', 'content-length', 'user-agent', 'x-real-ip', 'x-forwarded-for'])) {
+        $forwardedHeaders[] = "$key: $value";
+    }
+}
 
 // n8n'e istek yap
 $ch = curl_init($n8nWebhookUrl);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
 curl_setopt($ch, CURLOPT_POSTFIELDS, $formData);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-    'Content-Type: application/json',
-    'Content-Length: ' . strlen($formData)
-));
+curl_setopt($ch, CURLOPT_HTTPHEADER, $forwardedHeaders);
 
+// Hata ayıklama kodları
 $response = curl_exec($ch);
 $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$error = curl_error($ch); // Hata mesajını yakala
+
 curl_close($ch);
 
 // n8n'den gelen yanıtı tarayıcıya geri gönder
@@ -24,8 +34,8 @@ if ($httpcode == 200) {
     header('Content-Type: application/json');
     echo $response;
 } else {
-    // n8n'e istek başarısız olursa bir hata döndür
+    // Hata oluşursa, hata mesajını tarayıcıya geri gönder
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Sunucu hatası: Siparişiniz gönderilemedi.']);
+    echo json_encode(['success' => false, 'message' => "Sunucu hatası: Curl hatası - $error", 'http_code' => $httpcode, 'response_body' => $response]);
 }
 ?>
