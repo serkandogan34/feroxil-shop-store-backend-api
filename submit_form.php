@@ -1,6 +1,6 @@
 <?php
 // n8n Webhook URL'si
-$n8nWebhookUrl = "https://n8nwork.dtekai.com/webhook-test/bc74f59e-54c2-4521-85a1-6e21a0438c31";
+$n8nWebhookUrl = "https://n8nwork.dtekai.com/webhook/bc74f59e-54c2-4521-85a1-6e21a0438c31";
 
 // Tarayıcıdan gelen JSON verisini yakala
 $formData = file_get_contents('php://input');
