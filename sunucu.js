@@ -6,15 +6,13 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// *** 1. YENİ SATIR: Coolify'ın proxy'sine güvenmesini sağlıyoruz ***
-app.set('trust proxy', true);
-
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
+// URL'den UTM bilgilerini alan fonksiyon (değişiklik yok)
 function getTrafficSourceInfo(refererUrl) {
     if (!refererUrl) return {};
     try {
@@ -37,18 +35,28 @@ function getTrafficSourceInfo(refererUrl) {
 
 app.post('/api/order', async (req, res) => {
     try {
+        // --- NİHAİ DÜZELTMELER ---
+
+        // 1. Sayısal Sipariş ID'sini oluştur (Bu doğru ve kalıyor)
         const siparisID = `SIP-${new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')}`;
+
+        // 2. Gerçek Kullanıcı IP'sini bulmak için tüm olası başlıkları kontrol et
+        const realIp = req.headers['cf-connecting-ip'] || // Cloudflare için
+                       req.headers['x-real-ip'] ||            // Nginx proxy için
+                       req.headers['x-forwarded-for']?.split(',')[0].trim() || // Standart proxy'ler için
+                       req.socket.remoteAddress;             // Son çare
+
+        // --- DÜZELTMELER BİTTİ ---
 
         const { name, phone } = req.body;
         const referer = req.headers['referer'] || 'Direkt Giriş';
         const trafikKaynakBilgisi = getTrafficSourceInfo(referer);
 
         const requestData = {
-            siparisID: siparisID,
+            siparisID: siparisID, // Doğru sayısal ID
             isim: name,
             telefon: phone,
-            // *** 2. DEĞİŞEN SATIR: IP'yi 'req.ip' ile daha akıllı bir şekilde alıyoruz ***
-            ip: req.ip, 
+            ip: realIp, // Düzeltilmiş ve daha güvenilir IP adresi
             cihazBilgisi: req.headers['user-agent'],
             gelenSite: referer,
             ...trafikKaynakBilgisi,
