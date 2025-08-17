@@ -1,52 +1,77 @@
-// Gerekli kütüphaneleri import et
 const express = require('express');
-const axios = require('axios'); // Veri göndermek için popüler bir kütüphane
-const cors = require('cors'); // Tarayıcıdan gelen isteklere izin vermek için
+const bodyParser = require('body-parser'); // body-parser'ı koruyoruz, çünkü orijinal kodunuzda var.
+const axios = require('axios');
+const cors = require('cors');
 
-// Express uygulamasını başlat
 const app = express();
-const PORT = process.env.PORT || 3000; // Coolify genellikle portu kendi belirler
+const port = process.env.PORT || 3000; // Coolify için process.env.PORT kullanmak daha iyidir.
 
-// Gelen JSON verilerini okuyabilmek için gerekli ayar
-app.use(express.json());
-// Farklı domainlerden gelen isteklere izin ver (CORS)
 app.use(cors());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
-// n8n Webhook URL'si
-const n8nWebhookUrl = "https://n8nwork.dtekai.com/webhook/bc74f59e-54c2-4521-85a1-6e21a0438c31";
+// Coolify Çevre Değişkenlerinden n8n URL'sini alıyoruz. Bu doğru yöntem.
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-// HTML formundan gelen siparişleri karşılayacak olan adres (/api/order)
+// URL'den UTM ve anahtar kelimeleri ayıklayan yardımcı fonksiyon (Bu fonksiyonu koruyoruz)
+function getTrafficSourceInfo(refererUrl) {
+    if (!refererUrl) return {};
+    try {
+        const url = new URL(refererUrl);
+        const params = new URLSearchParams(url.search);
+        const info = {};
+        if (params.has('utm_source')) info.utm_source = params.get('utm_source');
+        if (params.has('utm_medium')) info.utm_medium = params.get('utm_medium');
+        if (params.has('utm_campaign')) info.utm_campaign = params.get('utm_campaign');
+        if (params.has('utm_term')) info.utm_term = params.get('utm_term');
+        if (params.has('utm_content')) info.utm_content = params.get('utm_content');
+        if (url.hostname.includes('google.com') && params.has('q')) {
+            info.arama_kelimesi = params.get('q');
+        }
+        return info;
+    } catch (e) {
+        return {};
+    }
+}
+
 app.post('/api/order', async (req, res) => {
-  try {
-    // 1. Tarayıcıdan gelen veriyi al
-    const gelenVeri = req.body;
+    try {
+        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
 
-    // 2. Yeni, sayısal ve tarih bazlı bir sipariş ID'si oluştur
-    const yeniSiparisID = `SIP-${Date.now()}`;
+        // 1. Yeni, temiz ve sayısal sipariş ID'sini oluştur
+        // Örnek: SIP-20250817224547
+        const siparisID = `SIP-${new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')}`;
 
-    // 3. Gelen veriye yeni sipariş ID'sini 'siparisID' adıyla ekle
-    const gonderilecekVeri = {
-      ...gelenVeri,
-      siparisID: yeniSiparisID
-    };
+        // --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
-    // 4. Güncellenmiş veriyi n8n'e gönder
-    const n8nYaniti = await axios.post(n8nWebhookUrl, gonderilecekVeri, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+        const { name, phone } = req.body;
+        const referer = req.headers['referer'] || 'Direkt Giriş';
+        const trafikKaynakBilgisi = getTrafficSourceInfo(referer);
 
-    // 5. n8n'den gelen yanıtı tarayıcıya (HTML formuna) geri gönder
-    res.status(200).json(n8nYaniti.data);
+        const requestData = {
+            siparisID: siparisID, // Orijinal 'id' alanı yerine bizim yeni ID'mizi kullanıyoruz
+            isim: name,
+            telefon: phone,
+            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+            cihazBilgisi: req.headers['user-agent'],
+            gelenSite: referer,
+            ...trafikKaynakBilgisi,
+            zamanDamgasi: new Date().toISOString()
+        };
+        
+        console.log('Toplanan veriler:', requestData);
 
-  } catch (error) {
-    console.error('Bir hata oluştu:', error.message);
-    res.status(500).json({ success: false, message: 'Sunucuda bir hata oluştu.' });
-  }
+        const n8nResponse = await axios.post(N8N_WEBHOOK_URL, requestData);
+        
+        console.log('n8n yanıtı:', n8nResponse.data);
+
+        res.status(200).json({ success: true, message: 'Siparişiniz başarıyla alındı!' });
+    } catch (error) {
+        console.error('n8n\'e veri gönderme hatası:', error.message);
+        res.status(500).json({ success: false, message: 'Siparişiniz gönderilirken bir hata oluştu.' });
+    }
 });
 
-// Sunucuyu dinlemeye başla
-app.listen(PORT, () => {
-  console.log(`Sunucu ${PORT} portunda çalışıyor...`);
+app.listen(port, () => {
+    console.log(`Backend sunucusu ${port} portunda çalışıyor.`);
 });
