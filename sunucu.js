@@ -12,7 +12,7 @@ app.use(bodyParser.json());
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-// URL'den UTM bilgilerini alan fonksiyon (değişiklik yok)
+// URL'den UTM bilgilerini alan fonksiyon (değişiklik yok, tüm özellikleriniz korunuyor)
 function getTrafficSourceInfo(refererUrl) {
     if (!refererUrl) return {};
     try {
@@ -35,28 +35,26 @@ function getTrafficSourceInfo(refererUrl) {
 
 app.post('/api/order', async (req, res) => {
     try {
-        // --- NİHAİ DÜZELTMELER ---
-
-        // 1. Sayısal Sipariş ID'sini oluştur (Bu doğru ve kalıyor)
-        const siparisID = `SIP-${new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')}`;
-
-        // 2. Gerçek Kullanıcı IP'sini bulmak için tüm olası başlıkları kontrol et
-        const realIp = req.headers['cf-connecting-ip'] || // Cloudflare için
-                       req.headers['x-real-ip'] ||            // Nginx proxy için
-                       req.headers['x-forwarded-for']?.split(',')[0].trim() || // Standart proxy'ler için
-                       req.socket.remoteAddress;             // Son çare
-
-        // --- DÜZELTMELER BİTTİ ---
-
         const { name, phone } = req.body;
         const referer = req.headers['referer'] || 'Direkt Giriş';
         const trafikKaynakBilgisi = getTrafficSourceInfo(referer);
 
+        // --- NİHAİ DÜZELTMELER ---
+
+        // 1. İSTEDİĞİNİZ SAYISAL ID'Yİ OLUŞTURUN
+        const siparisID = `SIP-${new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')}`;
+
+        // 2. DOĞRU IP'Yİ proxy.php'nin gönderdiği paketin İÇİNDEN ALIN
+        // proxy.php'den 'real_client_ip' gelmezse, eski yöntemleri deneyecek bir güvenlik katmanı
+        const realIp = req.body.real_client_ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+        // --- DÜZELTMELER BİTTİ ---
+
         const requestData = {
-            siparisID: siparisID, // Doğru sayısal ID
+            siparisID: siparisID, // Orijinal 'id' alanı yerine bizim yeni ID'mizi kullanıyoruz
             isim: name,
             telefon: phone,
-            ip: realIp, // Düzeltilmiş ve daha güvenilir IP adresi
+            ip: realIp, // Düzeltilmiş IP adresi
             cihazBilgisi: req.headers['user-agent'],
             gelenSite: referer,
             ...trafikKaynakBilgisi,
