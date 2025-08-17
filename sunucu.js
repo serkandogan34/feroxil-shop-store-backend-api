@@ -1,19 +1,20 @@
 const express = require('express');
-const bodyParser = require('body-parser'); // body-parser'ı koruyoruz, çünkü orijinal kodunuzda var.
+const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-const port = process.env.PORT || 3000; // Coolify için process.env.PORT kullanmak daha iyidir.
+const port = process.env.PORT || 3000;
+
+// *** 1. YENİ SATIR: Coolify'ın proxy'sine güvenmesini sağlıyoruz ***
+app.set('trust proxy', true);
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// Coolify Çevre Değişkenlerinden n8n URL'sini alıyoruz. Bu doğru yöntem.
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-// URL'den UTM ve anahtar kelimeleri ayıklayan yardımcı fonksiyon (Bu fonksiyonu koruyoruz)
 function getTrafficSourceInfo(refererUrl) {
     if (!refererUrl) return {};
     try {
@@ -36,23 +37,18 @@ function getTrafficSourceInfo(refererUrl) {
 
 app.post('/api/order', async (req, res) => {
     try {
-        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
-
-        // 1. Yeni, temiz ve sayısal sipariş ID'sini oluştur
-        // Örnek: SIP-20250817224547
         const siparisID = `SIP-${new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')}`;
-
-        // --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
         const { name, phone } = req.body;
         const referer = req.headers['referer'] || 'Direkt Giriş';
         const trafikKaynakBilgisi = getTrafficSourceInfo(referer);
 
         const requestData = {
-            siparisID: siparisID, // Orijinal 'id' alanı yerine bizim yeni ID'mizi kullanıyoruz
+            siparisID: siparisID,
             isim: name,
             telefon: phone,
-            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+            // *** 2. DEĞİŞEN SATIR: IP'yi 'req.ip' ile daha akıllı bir şekilde alıyoruz ***
+            ip: req.ip, 
             cihazBilgisi: req.headers['user-agent'],
             gelenSite: referer,
             ...trafikKaynakBilgisi,
